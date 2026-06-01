@@ -1,0 +1,14 @@
+# One-click full-stack deploy on Render (https://render.com).
+# New > Blueprint > connect this repo. Add GROQ_API_KEY as a secret env var.
+services:
+  - type: web
+    name: aeolus
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: AEOLUS_LLM_MODEL
+        value: groq/llama-3.3-70b-versatile

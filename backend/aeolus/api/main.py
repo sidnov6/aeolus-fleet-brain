@@ -150,3 +150,11 @@ def market(turbine_id: str):
     cost = pd.read_parquet(C.GOLD_DIR / "cost_of_downtime.parquet")
     cost = cost[cost["turbine_id"] == turbine_id].sort_values("timestamp")
     return json.loads(cost.to_json(orient="records"))
+
+
+# Serve the built frontend (single-service Docker deploy). Mounted LAST so it
+# never shadows the /api routes above.
+_DIST = C.PROJECT_DIR / "frontend" / "dist"
+if _DIST.exists():
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="frontend")
