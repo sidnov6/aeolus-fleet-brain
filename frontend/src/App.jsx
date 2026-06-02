@@ -112,9 +112,12 @@ export default function App() {
           <div><div className="h">MEAN WIND</div><div className="v">{meanWind.toFixed(1)} m/s</div></div>
           <div><div className="h">HEALTHY</div><div className="v">{healthy}/{turbines.length}</div></div>
         </div>
+        <div className="scroll-hint" onClick={() => document.getElementById("console")?.scrollIntoView({ behavior: "smooth" })}>
+          <span>Operations console</span><span>▼</span>
+        </div>
       </div>
 
-      <div className="layout">
+      <div className="layout" id="console">
         <div className="col">
           <ApprovalQueue approvals={approvals} onDecide={decide} onOpen={openDossier} />
         </div>

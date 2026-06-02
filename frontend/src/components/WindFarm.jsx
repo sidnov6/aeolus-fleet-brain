@@ -1,167 +1,155 @@
 import React, { useMemo, useState } from "react";
 import { STATUS_COLOR } from "../util.js";
 
-const SCENE_W = 1200;
+const SCENE_W = 1600;
+const SCENE_H = 760;
+const HORIZON = 470;
 
-// Procedurally lay out N turbines across depth rows (back rows smaller/higher,
-// front rows larger/lower), staggered so they don't align into a grid.
+// Scatter turbines across a deep field with atmospheric perspective: far turbines
+// sit near the horizon (small, hazy), near ones are large and crisp. A golden-ratio
+// depth sequence keeps neighbours at different depths so nothing crowds.
 function layout(n) {
-  const marginX = 60;
-  const rows = n <= 6 ? 2 : n <= 12 ? 3 : 4;
-  const perRow = Math.ceil(n / rows);
+  const marginX = 90;
   const slots = [];
   for (let i = 0; i < n; i++) {
-    const row = Math.floor(i / perRow);
-    const col = i % perRow;
-    const depth = rows === 1 ? 1 : row / (rows - 1); // 0 = back, 1 = front
-    const y = 300 + depth * 150;
-    const s = 0.46 + depth * 0.64;
-    const stagger = (row % 2) * 0.45;
-    const x = marginX + ((col + 0.5 + stagger) / perRow) * (SCENE_W - 2 * marginX);
-    slots.push({ x: Math.min(SCENE_W - marginX, x), y, s });
+    const depth = (i * 0.61803398875) % 1;            // 0 = far, 1 = near
+    const jitter = (((i * 2654435761) % 1000) / 1000 - 0.5) * 0.5;
+    const x = marginX + ((i + 0.5 + jitter) / n) * (SCENE_W - 2 * marginX);
+    const y = HORIZON - 150 + depth * 215;            // higher = farther
+    const s = 0.34 + depth * 0.92;                    // small (far) .. large (near)
+    const opacity = 0.42 + depth * 0.58;              // atmospheric haze
+    slots.push({ x, y, s, opacity, depth });
   }
   return slots;
 }
 
 const isDegraded = (t) => t.status === "degrading" || t.status === "critical";
 
-const H = 150;        // tower height (local)
-const R = 56;         // rotor radius (local)
+// majestic, slower spin; stronger wind turns faster
+const spinDur = (wind) => `${Math.min(12, Math.max(2.2, 42 / (Number(wind) + 3))).toFixed(2)}s`;
 
-// blade spin duration: stronger wind -> faster spin (shorter duration)
-const spinDur = (wind) => `${Math.min(9, Math.max(1.1, 24 / (Number(wind) + 2))).toFixed(2)}s`;
+const H = 150;   // tower height (local)
+const L = 74;    // blade length (local)
 
-function Blade({ angle }) {
-  return (
-    <path className="blade" transform={`rotate(${angle})`}
-      d={`M 0,-5 Q 4,-${R * 0.5} 2,-${R} Q 0,-${R + 4} -2,-${R} Q -4,-${R * 0.5} 0,-5 Z`} />
-  );
-}
+// slender, gently-curved aerofoil blade rooted at the hub (points up)
+const BLADE_D =
+  "M -1.5,0 C -2.8,-16 -2.3,-42 -1.0,-66 C -0.6,-72 0.1,-74.5 0.6,-74.5 " +
+  "C 1.3,-72 2.1,-58 1.9,-40 C 1.7,-22 1.4,-7 1.2,0 Z";
 
 function Turbine({ t, slot, onSelect, onHover, hovered }) {
   const color = STATUS_COLOR[t.status] || STATUS_COLOR.healthy;
-  const degraded = t.status === "degrading" || t.status === "critical";
+  const degraded = isDegraded(t);
   const dur = spinDur(t.wind_ms);
   return (
-    <g className="turbine" transform={`translate(${slot.x},${slot.y}) scale(${slot.s})`}
+    <g className="turbine" opacity={slot.opacity}
+       transform={`translate(${slot.x},${slot.y}) scale(${slot.s})`}
        onClick={() => onSelect(t)}
        onMouseEnter={() => onHover(t.turbine_id)} onMouseLeave={() => onHover(null)}>
-      {/* ground shadow */}
-      <ellipse cx="0" cy="2" rx="26" ry="6" fill="rgba(0,0,0,0.22)" />
-      {/* tower */}
-      <polygon className="tower-poly" points={`-5,0 5,0 2,${-H} -2,${-H}`} />
-      {/* nacelle + health ring at hub */}
+      <ellipse cx="0" cy="3" rx="20" ry="5" fill="rgba(0,0,0,0.18)" />
+      <polygon className="tower-poly" points={`-4,0 4,0 1.7,${-H} -1.7,${-H}`} />
       <g transform={`translate(0,${-H})`}>
-        <circle className="health-ring" r="13" style={{ stroke: color }} />
-        {degraded && <circle className="pulse-ring" cx="0" cy="0" fill="none"
-          stroke={color} strokeWidth="2.5" />}
-        <rect className="nacelle" x="-6" y="-6" width="20" height="11" rx="4" />
+        {/* soft health glow (refined — not a hard ring) */}
+        <circle r="20" fill={color} className={degraded ? "health-glow pulse" : "health-glow"} />
+        {/* swept-area disc — subtle motion cue */}
+        <circle r={L} className="swept-disc" />
+        {/* nacelle */}
+        <rect className="nacelle" x="-7" y="-4.5" width="18" height="9" rx="4.5" />
+        <circle className="nacelle" cx="11" cy="0" r="4.8" />
         {/* spinning rotor */}
         <g className="rotor" style={{ animationDuration: dur }}>
-          <Blade angle={0} /><Blade angle={120} /><Blade angle={240} />
-          <circle className="hub" r="4.5" />
+          <path className="blade" d={BLADE_D} transform="rotate(0)" />
+          <path className="blade" d={BLADE_D} transform="rotate(120)" />
+          <path className="blade" d={BLADE_D} transform="rotate(240)" />
+          <circle className="hub" r="3.6" />
         </g>
       </g>
-      {/* label */}
-      <text x="0" y="20" textAnchor="middle" fontSize="11" fontWeight="700" fill={color}>
-        {t.turbine_id}
-      </text>
-      <text x="0" y="32" textAnchor="middle" fontSize="9" fill="var(--muted)">
-        {Math.round(t.health_score)} · {Math.round(t.wind_ms)} m/s
-      </text>
+      <text x="0" y="20" textAnchor="middle" fontSize="10" fontWeight="600"
+        fill={degraded ? color : "var(--muted)"} opacity="0.9">{t.turbine_id}</text>
       {hovered && (
-        <g transform={`translate(0,${-H - 78})`} style={{ pointerEvents: "none" }}>
-          <rect x="-66" y="-30" width="132" height="52" rx="9"
-            fill="var(--panel-solid)" stroke={color} strokeWidth="1.2" opacity="0.96" />
-          <text x="0" y="-12" textAnchor="middle" fontSize="11" fontWeight="800" fill="var(--text)">
-            {t.turbine_id} · {t.status}
-          </text>
+        <g transform={`translate(0,${-H - 70})`} style={{ pointerEvents: "none" }}>
+          <rect x="-64" y="-30" width="128" height="50" rx="10"
+            fill="var(--panel-solid)" stroke={color} strokeWidth="1" opacity="0.97" />
+          <text x="0" y="-12" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text)">
+            {t.turbine_id} · {t.status}</text>
           <text x="0" y="2" textAnchor="middle" fontSize="9.5" fill="var(--muted)">
-            health {Math.round(t.health_score)} · wind {t.wind_ms} m/s
-          </text>
-          <text x="0" y="15" textAnchor="middle" fontSize="9.5" fill="var(--muted)">
-            output ~{Math.round(t.expected_power_kw || 0)} kW
-          </text>
+            health {Math.round(t.health_score)} · wind {t.wind_ms} m/s</text>
+          <text x="0" y="14" textAnchor="middle" fontSize="9.5" fill="var(--muted)">
+            output ~{Math.round(t.expected_power_kw || 0)} kW</text>
         </g>
       )}
     </g>
   );
 }
 
-function WindLines() {
-  const lines = Array.from({ length: 16 }, (_, i) => {
-    const y = 40 + ((i * 53) % 300);
-    const len = 26 + (i % 5) * 14;
-    const dur = (5 + (i % 6)) + "s";
-    const delay = -((i * 0.7) % 6) + "s";
-    return (
-      <line key={i} className="wind-line" x1={0} y1={y} x2={len} y2={y}
-        style={{ animationDuration: dur, animationDelay: delay }} />
-    );
-  });
-  return <g>{lines}</g>;
+function WindStreaks() {
+  return (
+    <g>
+      {Array.from({ length: 11 }, (_, i) => {
+        const y = 60 + ((i * 67) % 360);
+        const len = 60 + (i % 4) * 40;
+        const dur = (9 + (i % 5) * 2) + "s";
+        const delay = -((i * 1.3) % 9) + "s";
+        return <line key={i} className="wind-line" x1={0} y1={y} x2={len} y2={y}
+          style={{ animationDuration: dur, animationDelay: delay }} />;
+      })}
+    </g>
+  );
 }
 
 export default function WindFarm({ turbines = [], onSelect }) {
   const [hovered, setHovered] = useState(null);
-  const W = SCENE_W, Ht = 520;
   const slots = useMemo(() => layout(turbines.length), [turbines.length]);
-  // paint healthy first, degrading last (on top) so flagged turbines stay visible
+  // draw far→near so depth ordering is correct; degraded last so they stay visible
   const order = useMemo(
-    () => turbines.map((t, i) => ({ t, i }))
-      .sort((a, b) => (isDegraded(a.t) ? 1 : 0) - (isDegraded(b.t) ? 1 : 0)),
-    [turbines]);
+    () => turbines.map((t, i) => ({ t, i, slot: slots[i] }))
+      .sort((a, b) => (a.slot.depth - b.slot.depth) || (isDegraded(a.t) - isDegraded(b.t))),
+    [turbines, slots]);
+
   return (
-    <svg className="scene" viewBox={`0 0 ${W} ${Ht}`} preserveAspectRatio="xMidYMid slice">
+    <svg className="scene" viewBox={`0 0 ${SCENE_W} ${SCENE_H}`} preserveAspectRatio="xMidYMid slice">
       <defs>
         <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="var(--sky-top)" />
-          <stop offset="55%" stopColor="var(--sky-mid)" />
+          <stop offset="50%" stopColor="var(--sky-mid)" />
           <stop offset="100%" stopColor="var(--sky-bot)" />
         </linearGradient>
         <linearGradient id="towerGrad" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="var(--tower2)" />
-          <stop offset="50%" stopColor="var(--tower)" />
+          <stop offset="45%" stopColor="var(--tower)" />
           <stop offset="100%" stopColor="var(--tower2)" />
         </linearGradient>
         <radialGradient id="orbGrad" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="var(--orb)" />
-          <stop offset="100%" stopColor="transparent" />
+          <stop offset="0%" stopColor="var(--orb)" /><stop offset="100%" stopColor="transparent" />
         </radialGradient>
+        <radialGradient id="haze" cx="50%" cy="100%" r="80%">
+          <stop offset="0%" stopColor="var(--haze)" /><stop offset="100%" stopColor="transparent" />
+        </radialGradient>
+        <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--hill-mid)" /><stop offset="100%" stopColor="var(--hill-front)" />
+        </linearGradient>
       </defs>
 
-      <rect width={W} height={Ht} fill="url(#sky)" />
+      <rect width={SCENE_W} height={SCENE_H} fill="url(#sky)" />
+      <circle className="orb-glow" cx="1300" cy="150" r="150" fill="url(#orbGrad)" />
+      <circle className="orb" cx="1300" cy="150" r="52" />
 
-      {/* sun / moon */}
-      <circle className="orb-glow" cx="1010" cy="118" r="110" fill="url(#orbGrad)" />
-      <circle className="orb" cx="1010" cy="118" r="44" />
+      <g>{Array.from({ length: 60 }, (_, i) => (
+        <circle key={i} className="star" cx={(i * 211) % SCENE_W} cy={(i * 89) % 300}
+          r={(i % 3) * 0.5 + 0.5} style={{ animationDelay: `${(i % 7) * 0.6}s` }} />))}</g>
+      <g className="cloud c1"><ellipse cx="300" cy="110" rx="80" ry="22" />
+        <ellipse cx="370" cy="98" rx="56" ry="18" /><ellipse cx="240" cy="100" rx="50" ry="16" /></g>
+      <g className="cloud c2"><ellipse cx="820" cy="160" rx="66" ry="18" />
+        <ellipse cx="880" cy="150" rx="46" ry="15" /></g>
 
-      {/* stars (dark) */}
-      <g>
-        {Array.from({ length: 46 }, (_, i) => (
-          <circle key={i} className="star"
-            cx={(i * 137) % W} cy={(i * 71) % 230} r={(i % 3) * 0.5 + 0.6}
-            style={{ animationDelay: `${(i % 7) * 0.5}s` }} />
-        ))}
-      </g>
-      {/* clouds (light) */}
-      <g className="cloud c1">
-        <ellipse cx="260" cy="90" rx="60" ry="20" /><ellipse cx="310" cy="80" rx="44" ry="18" />
-        <ellipse cx="210" cy="82" rx="40" ry="16" />
-      </g>
-      <g className="cloud c2">
-        <ellipse cx="620" cy="140" rx="52" ry="17" /><ellipse cx="660" cy="132" rx="38" ry="15" />
-      </g>
+      <WindStreaks />
 
-      <WindLines />
+      {/* layered hills + atmospheric haze band at the horizon */}
+      <path d="M0,430 Q400,392 800,424 T1600,408 L1600,760 L0,760 Z" fill="var(--hill-back)" opacity="0.8" />
+      <rect x="0" y={HORIZON - 70} width={SCENE_W} height="120" fill="url(#haze)" opacity="0.7" />
+      <path d={`M0,${HORIZON} Q500,${HORIZON-30} 1000,${HORIZON+8} T1600,${HORIZON-6} L1600,760 L0,760 Z`} fill="url(#ground)" />
 
-      {/* hills (parallax) */}
-      <path d="M0,330 Q300,280 600,318 T1200,300 L1200,520 L0,520 Z" fill="var(--hill-back)" />
-      <path d="M0,372 Q360,330 720,366 T1200,356 L1200,520 L0,520 Z" fill="var(--hill-mid)" />
-      <path d="M0,420 Q420,392 840,420 T1200,410 L1200,520 L0,520 Z" fill="var(--hill-front)" />
-
-      {order.map(({ t, i }) => (
-        <Turbine key={t.turbine_id} t={t} slot={slots[i]}
+      {order.map(({ t, i, slot }) => (
+        <Turbine key={t.turbine_id} t={t} slot={slot}
           onSelect={onSelect} onHover={setHovered} hovered={hovered === t.turbine_id} />
       ))}
     </svg>

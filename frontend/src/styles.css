@@ -28,10 +28,11 @@
   --hill-front: #0a1421;
   --orb: #cdd9ff;          /* moon */
   --orb-glow: rgba(150,180,255,0.35);
-  --tower: #9fb2c6;
-  --tower2: #6b8198;
-  --blade: #cdd9e8;
-  --particle: rgba(180,210,255,0.18);
+  --haze: #16314e;
+  --tower: #b6c6d8;
+  --tower2: #5d748c;
+  --blade: #dde7f1;
+  --particle: rgba(180,210,255,0.14);
   --star: rgba(255,255,255,0.85);
   --star-show: 1;
   --cloud-show: 0;
@@ -65,10 +66,11 @@
   --hill-front: #7fb389;
   --orb: #fff4c2;          /* sun */
   --orb-glow: rgba(255,224,130,0.6);
-  --tower: #f3f7fa;
-  --tower2: #c7d3de;
+  --haze: #dbeaf6;
+  --tower: #fbfdff;
+  --tower2: #c2d0dd;
   --blade: #ffffff;
-  --particle: rgba(255,255,255,0.55);
+  --particle: rgba(255,255,255,0.5);
   --star: rgba(255,255,255,0);
   --star-show: 0;
   --cloud-show: 1;
@@ -121,9 +123,15 @@ body {
 .kill.engaged { background: var(--critical); color: #fff; }
 
 /* ============================ HERO WIND FARM ============================ */
-.hero { position: relative; width: 100%; height: clamp(360px, 46vh, 560px); overflow: hidden;
-  border-bottom: 1px solid var(--border); }
+.hero { position: relative; width: 100%; height: calc(100vh - 62px); min-height: 480px;
+  overflow: hidden; border-bottom: 1px solid var(--border); }
 .scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.scroll-hint { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 6;
+  font-size: 11px; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: .8;
+  animation: bob 2.4s ease-in-out infinite; user-select: none; }
+@keyframes bob { 0%,100% { transform: translate(-50%,0); } 50% { transform: translate(-50%,5px); } }
 
 /* sky stars / clouds toggled by theme variable */
 .star { fill: var(--star); opacity: var(--star-show); animation: twinkle 3.5s ease-in-out infinite; }
@@ -145,9 +153,10 @@ body {
 .tower-poly { fill: url(#towerGrad); }
 .nacelle { fill: var(--tower2); }
 .hub { fill: var(--tower); }
-.health-ring { fill: none; stroke-width: 3; }
-.pulse-ring { animation: pulsering 2.2s ease-out infinite; }
-@keyframes pulsering { 0% { r: 10; opacity: .55; } 100% { r: 34; opacity: 0; } }
+.swept-disc { fill: var(--blade); opacity: 0.05; }
+.health-glow { filter: blur(7px); opacity: 0.16; }
+.health-glow.pulse { opacity: 0.5; animation: glowpulse 2.6s ease-in-out infinite; }
+@keyframes glowpulse { 0%,100% { opacity: 0.28; } 50% { opacity: 0.62; } }
 
 .wind-line { stroke: var(--particle); stroke-width: 2; stroke-linecap: round;
   animation: gust linear infinite; }
