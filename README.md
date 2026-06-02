@@ -82,7 +82,7 @@ the difference is the revenue-protected figure.
 
 | Plane | Source | Licence |
 |---|---|---|
-| SCADA telemetry | **Kelmarsh wind farm** — 6× Senvion MM92, 10-min SCADA + fault logbook, 2016 ([Zenodo](https://doi.org/10.5281/zenodo.7212475)) | CC-BY-4.0 |
+| SCADA telemetry | **Kelmarsh wind farm** — 6× Senvion MM92, 10-min SCADA + fault logbook, 2016 ([Zenodo](https://doi.org/10.5281/zenodo.7212475)). The fleet is expanded to **20 turbines** by adding 14 *derived* turbines (real power curves + live weather, labelled synthetic) so the ops centre runs at scale. | CC-BY-4.0 |
 | Grid & market | **energy-charts.info** (Fraunhofer ISE) — German DE-LU day-ahead prices · *(ENTSO-E adapter optional)* | Free, no key |
 | Weather | **Open-Meteo** — hub-height wind forecast at each turbine's coordinates | Free, no key |
 | Knowledge (RAG) | O&M / failure-mode references + the real SCADA event logbook | authored corpus |

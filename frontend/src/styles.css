@@ -110,6 +110,12 @@ body {
   transition: transform .2s, background .3s;
 }
 .icon-btn:hover { transform: translateY(-1px) rotate(8deg); }
+.refresh-chip { cursor: pointer; display: inline-flex; align-items: center; gap: 5px; background: var(--panel2); }
+.refresh-chip:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.refresh-chip:disabled { opacity: .7; cursor: default; }
+.spin-ico { display: inline-block; }
+.spin-ico.spinning { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .kill { font-size: 12px; padding: 8px 13px; border-radius: 10px; cursor: pointer;
   border: 1px solid var(--critical); background: transparent; color: var(--critical); font-weight: 700; }
 .kill.engaged { background: var(--critical); color: #fff; }

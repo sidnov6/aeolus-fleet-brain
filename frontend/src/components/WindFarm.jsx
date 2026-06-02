@@ -1,15 +1,29 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { STATUS_COLOR } from "../util.js";
 
-// Composition slots (x, ground-y, scale) — front row big, back row small for depth.
-const SLOTS = [
-  { x: 200, y: 396, s: 1.12 },
-  { x: 565, y: 410, s: 1.20 },
-  { x: 950, y: 392, s: 1.06 },
-  { x: 370, y: 352, s: 0.70 },
-  { x: 770, y: 350, s: 0.68 },
-  { x: 1110, y: 366, s: 0.82 },
-];
+const SCENE_W = 1200;
+
+// Procedurally lay out N turbines across depth rows (back rows smaller/higher,
+// front rows larger/lower), staggered so they don't align into a grid.
+function layout(n) {
+  const marginX = 60;
+  const rows = n <= 6 ? 2 : n <= 12 ? 3 : 4;
+  const perRow = Math.ceil(n / rows);
+  const slots = [];
+  for (let i = 0; i < n; i++) {
+    const row = Math.floor(i / perRow);
+    const col = i % perRow;
+    const depth = rows === 1 ? 1 : row / (rows - 1); // 0 = back, 1 = front
+    const y = 300 + depth * 150;
+    const s = 0.46 + depth * 0.64;
+    const stagger = (row % 2) * 0.45;
+    const x = marginX + ((col + 0.5 + stagger) / perRow) * (SCENE_W - 2 * marginX);
+    slots.push({ x: Math.min(SCENE_W - marginX, x), y, s });
+  }
+  return slots;
+}
+
+const isDegraded = (t) => t.status === "degrading" || t.status === "critical";
 
 const H = 150;        // tower height (local)
 const R = 56;         // rotor radius (local)
@@ -90,7 +104,13 @@ function WindLines() {
 
 export default function WindFarm({ turbines = [], onSelect }) {
   const [hovered, setHovered] = useState(null);
-  const W = 1200, Ht = 520;
+  const W = SCENE_W, Ht = 520;
+  const slots = useMemo(() => layout(turbines.length), [turbines.length]);
+  // paint healthy first, degrading last (on top) so flagged turbines stay visible
+  const order = useMemo(
+    () => turbines.map((t, i) => ({ t, i }))
+      .sort((a, b) => (isDegraded(a.t) ? 1 : 0) - (isDegraded(b.t) ? 1 : 0)),
+    [turbines]);
   return (
     <svg className="scene" viewBox={`0 0 ${W} ${Ht}`} preserveAspectRatio="xMidYMid slice">
       <defs>
@@ -140,8 +160,8 @@ export default function WindFarm({ turbines = [], onSelect }) {
       <path d="M0,372 Q360,330 720,366 T1200,356 L1200,520 L0,520 Z" fill="var(--hill-mid)" />
       <path d="M0,420 Q420,392 840,420 T1200,410 L1200,520 L0,520 Z" fill="var(--hill-front)" />
 
-      {turbines.map((t, i) => (
-        <Turbine key={t.turbine_id} t={t} slot={SLOTS[i % SLOTS.length]}
+      {order.map(({ t, i }) => (
+        <Turbine key={t.turbine_id} t={t} slot={slots[i]}
           onSelect={onSelect} onHover={setHovered} hovered={hovered === t.turbine_id} />
       ))}
     </svg>

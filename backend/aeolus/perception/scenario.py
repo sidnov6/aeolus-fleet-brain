@@ -32,6 +32,9 @@ from aeolus import config as C
 INJECTIONS = {
     "KWF3": [("front_bearing_temp", 8.5, 100), ("rotor_bearing_temp", 5.5, 100)],
     "KWF5": [("gen_bearing_rear_temp", 5.0, 70)],
+    # a couple more across the expanded fleet for a richer ops picture
+    "KWF11": [("front_bearing_temp", 7.0, 90)],
+    "KWF16": [("gen_bearing_front_temp", 6.0, 80), ("gen_bearing_rear_temp", 4.0, 80)],
 }
 
 

@@ -13,7 +13,7 @@ import sys
 
 from aeolus.agents import run as agents_run
 from aeolus.governance import gate
-from aeolus.lakehouse import ingest, synthetic
+from aeolus.lakehouse import expand, ingest, synthetic
 from aeolus.market import market
 from aeolus.optimizer import scheduler
 from aeolus.perception import detect, models, scenario
@@ -23,6 +23,8 @@ def run(fast: bool = False) -> None:
     if not fast:
         print("== M0: lakehouse ==")
         ingest.run()
+        print("== M0: fleet expansion (6 real + derived) ==")
+        expand.run()
         print("== M1: scenario + perception models ==")
         scenario.inject()
         models.run()

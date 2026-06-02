@@ -119,12 +119,30 @@ def sim_precheck(dossier: dict) -> dict:
 # ---------------------------------------------------------------------------
 # Build the approval queue from dossiers
 # ---------------------------------------------------------------------------
-def build_approval_queue() -> dict:
+def build_approval_queue(preserve: bool = False) -> dict:
     dossiers = json.loads((C.GOLD_DIR / "dossiers.json").read_text())
     schedule = json.loads((C.GOLD_DIR / "schedule.json").read_text())
-    audit.reset()
-    audit.append("PIPELINE_RUN", {"n_incidents": len(dossiers),
-                                   "horizon_start": schedule.get("horizon_start")})
+
+    # carry over prior human decisions across a refresh (don't wipe approvals)
+    prior = {}
+    appr_path = C.GOLD_DIR / "approvals.json"
+    if preserve and appr_path.exists():
+        try:
+            for q in json.loads(appr_path.read_text()).get("queue", []):
+                if q.get("status") in ("approved", "rejected"):
+                    prior[q["id"]] = {"status": q["status"], "approved_by": q.get("approved_by")}
+        except Exception:
+            prior = {}
+
+    is_refresh = bool(preserve)
+    if is_refresh:
+        audit.append("PIPELINE_REFRESH", {"n_incidents": len(dossiers),
+                                          "horizon_start": schedule.get("horizon_start"),
+                                          "preserved_decisions": len(prior)})
+    else:
+        audit.reset()
+        audit.append("PIPELINE_RUN", {"n_incidents": len(dossiers),
+                                      "horizon_start": schedule.get("horizon_start")})
 
     queue = []
     realized = 0.0
@@ -142,11 +160,19 @@ def build_approval_queue() -> dict:
         elif not sim["passed"]:
             status = "blocked_sim"
 
+        action_id = f"WO-{d['turbine_id']}-{i+1:03d}"
+        approved_by = None
+        if action_id in prior:                       # carry over a prior decision
+            status = prior[action_id]["status"]
+            approved_by = prior[action_id]["approved_by"]
+            if status == "approved":
+                realized += value
         item = {
-            "id": f"WO-{d['turbine_id']}-{i+1:03d}",
+            "id": action_id,
             "turbine_id": d["turbine_id"],
             "component": d["component"],
             "status": status,
+            "approved_by": approved_by,
             "value_protected_eur": value,
             "policy": policy,
             "sim": sim,
@@ -156,7 +182,8 @@ def build_approval_queue() -> dict:
             "crew": sched.get("crew"),
         }
         queue.append(item)
-        audit.append("ACTION_PROPOSED", {
+        if not is_refresh:
+            audit.append("ACTION_PROPOSED", {
             "id": item["id"], "turbine_id": d["turbine_id"], "component": d["component"],
             "root_cause": d.get("diagnosis", {}).get("root_cause"),
             "confidence": d.get("diagnosis", {}).get("confidence"),

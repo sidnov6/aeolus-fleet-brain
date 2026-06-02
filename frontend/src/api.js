@@ -105,4 +105,12 @@ export const api = {
     overrides.kill = active;
     return { kill_switch: active };
   },
+  async pipelineStatus() {
+    if ((await detect()) !== "live") return null;     // no scheduler in static demo
+    try { return await getJSON(LIVE + "/pipeline/status"); } catch { return null; }
+  },
+  async pipelineRun() {
+    if ((await detect()) !== "live") return { started: false };
+    return postLive("/pipeline/run", {});
+  },
 };

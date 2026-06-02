@@ -28,6 +28,8 @@ def build_crew_roster(horizon_start: pd.Timestamp, days: int = 5) -> pd.DataFram
     crews = [
         {"crew_id": "CREW-A", "skills": "main_bearing,gearbox,power_train", "base_km": 8},
         {"crew_id": "CREW-B", "skills": "generator,pitch_system,rotor,nacelle", "base_km": 22},
+        {"crew_id": "CREW-C", "skills": "main_bearing,generator,gearbox,power_train,pitch_system,rotor,nacelle", "base_km": 15},
+        {"crew_id": "CREW-D", "skills": "main_bearing,generator,gearbox,power_train,pitch_system,rotor,nacelle", "base_km": 19},
     ]
     rows = []
     for d in range(days):

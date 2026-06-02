@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { api } from "./api.js";
 import { useTheme } from "./theme.js";
+import { ago } from "./util.js";
 import Counter from "./components/Counter.jsx";
 import WindFarm from "./components/WindFarm.jsx";
 import ApprovalQueue from "./components/ApprovalQueue.jsx";
@@ -14,14 +15,31 @@ export default function App() {
   const [approvals, setApprovals] = useState(null);
   const [audit, setAudit] = useState(null);
   const [drawer, setDrawer] = useState(null);
+  const [pipeline, setPipeline] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [err, setErr] = useState(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [f, a, au] = await Promise.all([api.fleet(), api.approvals(), api.audit()]);
-      setFleet(f); setApprovals(a); setAudit(au); setErr(null);
+      const [f, a, au, p] = await Promise.all([
+        api.fleet(), api.approvals(), api.audit(), api.pipelineStatus()]);
+      setFleet(f); setApprovals(a); setAudit(au); setPipeline(p); setErr(null);
     } catch (e) { setErr(String(e.message || e)); }
   }, []);
+
+  const runRefresh = async () => {
+    setRefreshing(true);
+    try { await api.pipelineRun(); } catch (e) { /* ignore */ }
+    // poll until the backend reports the run finished, then refresh views
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const p = await api.pipelineStatus();
+      setPipeline(p);
+      if (p && !p.running) break;
+    }
+    await refresh();
+    setRefreshing(false);
+  };
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => {});
@@ -63,7 +81,16 @@ export default function App() {
             LLM: {health.llm_mode === "llm" ? health.llm_model : "deterministic fallback"}
           </span>
         )}
-        <span className="badge">site · {fleet?.site || "…"}</span>
+        <span className="badge">site · {fleet?.site || "…"} · {fleet?.turbines?.length || 0} turbines</span>
+        {pipeline && (
+          <button className="badge refresh-chip" onClick={runRefresh} disabled={refreshing || pipeline.running}
+            title={pipeline.scheduler_enabled
+              ? `Auto-refresh every ${pipeline.interval_s}s · re-optimises against the live market`
+              : "Re-run the live layers now"}>
+            <span className={`spin-ico ${refreshing || pipeline.running ? "spinning" : ""}`}>⟳</span>
+            {refreshing || pipeline.running ? " refreshing…" : ` updated ${ago(pipeline.last_run)}`}
+          </button>
+        )}
         <button className="icon-btn" title="Toggle theme" onClick={toggle}>
           {theme === "dark" ? "☀" : "☾"}
         </button>
@@ -97,9 +124,10 @@ export default function App() {
       </div>
 
       <div className="synthetic-note">
-        Real data: Kelmarsh wind farm SCADA (Zenodo, CC-BY-4.0) · German DE-LU day-ahead prices
-        (energy-charts.info) · Open-Meteo hub-height wind. Synthetic & labelled: crew roster, parts
-        inventory, grid commitments, and the injected degradation scenario. Click any turbine for its dossier.
+        Real data: 6 measured Kelmarsh turbines (Zenodo SCADA, CC-BY-4.0) · German DE-LU day-ahead
+        prices (energy-charts.info) · Open-Meteo hub-height wind. Synthetic & labelled: 14 derived
+        turbines (for fleet scale), crew roster, parts inventory, grid commitments, and the injected
+        degradation scenario. The economics auto-refresh against the live market. Click any turbine for its dossier.
       </div>
 
       {drawer && <IncidentDrawer data={drawer} onClose={() => setDrawer(null)} />}

@@ -7,6 +7,9 @@ trail. Run:  uvicorn aeolus.api.main:app --reload --port 8000
 from __future__ import annotations
 
 import json
+import os
+import threading
+import time
 
 import pandas as pd
 from fastapi import FastAPI, HTTPException
@@ -150,6 +153,69 @@ def market(turbine_id: str):
     cost = pd.read_parquet(C.GOLD_DIR / "cost_of_downtime.parquet")
     cost = cost[cost["turbine_id"] == turbine_id].sort_values("timestamp")
     return json.loads(cost.to_json(orient="records"))
+
+
+# ---------------------------------------------------------------------------
+# Scheduler — periodically re-runs the LIVE layers (weather + market + re-optimise)
+# so the economics refresh against the moving market. Human approvals are
+# preserved across refreshes (build_approval_queue(preserve=True)).
+# ---------------------------------------------------------------------------
+_sched = {"running": False, "last_run": None, "last_duration_s": None,
+          "interval_s": int(os.environ.get("AEOLUS_REFRESH_SECONDS", "180")),
+          "last_error": None}
+_sched_lock = threading.Lock()
+
+
+def _refresh() -> bool:
+    with _sched_lock:
+        if _sched["running"]:
+            return False
+        _sched["running"] = True
+    t0 = time.time()
+    try:
+        from aeolus.lakehouse import synthetic as synth_mod
+        from aeolus.market import market as market_mod
+        from aeolus.optimizer import scheduler as sched_mod
+        start, hours = market_mod.get_horizon()
+        market_mod.run()                                   # live Open-Meteo + prices
+        synth_mod.run(horizon_start=start.normalize(), days=hours // 24 + 3)
+        sched_mod.optimise()                               # re-optimise schedule
+        gate.build_approval_queue(preserve=True)           # keep human decisions
+        _sched["last_error"] = None
+    except Exception as e:                                 # never crash the loop
+        _sched["last_error"] = f"{type(e).__name__}: {str(e)[:160]}"
+    finally:
+        _sched["last_run"] = pd.Timestamp.now(tz="UTC").isoformat()
+        _sched["last_duration_s"] = round(time.time() - t0, 1)
+        _sched["running"] = False
+    return True
+
+
+def _loop() -> None:
+    while True:
+        time.sleep(_sched["interval_s"])
+        if os.environ.get("AEOLUS_SCHEDULER", "1") != "0":
+            _refresh()
+
+
+@app.on_event("startup")
+def _start_scheduler() -> None:
+    if os.environ.get("AEOLUS_SCHEDULER", "1") != "0":
+        threading.Thread(target=_loop, daemon=True).start()
+
+
+@app.get("/api/pipeline/status")
+def pipeline_status():
+    return {**_sched,
+            "scheduler_enabled": os.environ.get("AEOLUS_SCHEDULER", "1") != "0"}
+
+
+@app.post("/api/pipeline/run")
+def pipeline_run():
+    if _sched["running"]:
+        raise HTTPException(409, "A refresh is already running")
+    threading.Thread(target=_refresh, daemon=True).start()
+    return {"started": True}
 
 
 # Serve the built frontend (single-service Docker deploy). Mounted LAST so it

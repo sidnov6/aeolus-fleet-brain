@@ -138,11 +138,12 @@ def _solve(options, n_incidents):
     # decision var per option
     choose = [model.NewBoolVar(f"opt_{i}") for i in range(len(options))]
 
-    # exactly one option per incident
+    # at most one option per incident (an incident may be undeployable this
+    # horizon if crews/weather/grid conflict — it's then reported, not forced)
     for inc in range(n_incidents):
         idxs = [i for i, o in enumerate(options) if o["incident"] == inc]
         if idxs:
-            model.Add(sum(choose[i] for i in idxs) == 1)
+            model.Add(sum(choose[i] for i in idxs) <= 1)
 
     # per-crew no-overlap via optional intervals
     H = 3600
@@ -161,14 +162,18 @@ def _solve(options, n_incidents):
         if intervals:
             model.AddNoOverlap(intervals)
 
-    # objective: minimise total cost (scaled to int EUR)
-    model.Minimize(sum(int(round(o["total"])) * choose[i] for i, o in enumerate(options)))
+    # objective: schedule as many incidents as feasible, cheapest first.
+    # A per-job bonus far larger than any single cost makes "schedule it" always
+    # preferable to leaving it; among scheduled jobs, total cost is minimised.
+    BONUS = 10_000_000
+    model.Minimize(sum((int(round(o["total"])) - BONUS) * choose[i]
+                       for i, o in enumerate(options)))
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 10.0
     status = solver.Solve(model)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        return None, status
+        return [], status
     chosen = [options[i] for i in range(len(options)) if solver.Value(choose[i]) == 1]
     return chosen, status
 
@@ -202,17 +207,23 @@ def optimise() -> dict:
         return {"schedule": [], "revenue_protected_eur": 0.0}
 
     chosen, status = _solve(options, len(incidents))
+    chosen = chosen or []
     naive = _naive_baseline(options, len(incidents))
 
-    # incidents with zero feasible options can't be scheduled this horizon
+    # any incident not in the chosen set is undeployable this horizon
+    scheduled_idx = {o["incident"] for o in chosen}
     unscheduled = []
     for idx, inc in enumerate(incidents):
-        if not any(o["incident"] == idx for o in options):
-            unscheduled.append({
-                "turbine_id": inc["turbine_id"], "component": inc["component"],
-                "reason": "No window satisfies crew availability + safe-climb wind "
-                          "+ grid-commitment constraints within the horizon.",
-            })
+        if idx in scheduled_idx:
+            continue
+        had_options = any(o["incident"] == idx for o in options)
+        unscheduled.append({
+            "turbine_id": inc["turbine_id"], "component": inc["component"],
+            "reason": ("All feasible windows conflict with an already-committed crew "
+                       "this horizon." if had_options else
+                       "No window satisfies crew availability + safe-climb wind "
+                       "+ grid-commitment constraints within the horizon."),
+        })
 
     opt_total = sum(o["total"] for o in chosen)
     naive_total = sum(o["total"] for o in naive)
