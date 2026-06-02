@@ -3,7 +3,12 @@
 // JSON snapshots (public/api-static/) with client-side mutations, so the
 // statically-deployed demo (e.g. on Vercel) stays fully interactive.
 
-const LIVE = "/api";
+// Point at a remote backend by building with VITE_API_BASE=https://host (no
+// trailing slash). Defaults to same-origin "/api". When unreachable, the client
+// falls back to the baked static snapshots below.
+const LIVE = (import.meta.env.VITE_API_BASE
+  ? import.meta.env.VITE_API_BASE.replace(/\/$/, "") + "/api"
+  : "/api");
 const STATIC = "/api-static";
 
 let _mode = null;                       // 'live' | 'static'
