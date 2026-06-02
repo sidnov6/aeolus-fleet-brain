@@ -14,7 +14,8 @@ market is not.
 
 Built end-to-end on **real, openly-licensed European wind-farm data** and **free APIs** — $0 to run.
 
-**▶ Live demo: https://aeolus-fleet-brain.vercel.app** · See [DEPLOY.md](DEPLOY.md) for the full-stack (live backend) deploy.
+**▶ Live (full stack): https://sidnov6-aeolus-fleet-brain.hf.space** — real backend: live scheduler, Groq reasoning, server-persisted approvals (free Space sleeps when idle → first hit ~30–60s).
+**▶ Static demo: https://aeolus-fleet-brain.vercel.app** — always-up snapshot. See [DEPLOY.md](DEPLOY.md).
 
 ---
 
